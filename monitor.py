@@ -64,25 +64,30 @@ async def main():
       "Accept": "application/json",
   }
 
-  current_time = datetime.now(TAIWAN_TZ)
-
   async with httpx.AsyncClient(headers=headers, timeout=20.0) as client:
     try:
-      # ⚡ 內循環：單次觸發內連續檢查 4 次，每 60 秒一次
-      for i in range(4):
+      # ⚡ 升級版高密度內循環：每 15 秒檢查一次，連續跑 112 次（總計約 28 分鐘）
+      # 這樣可以完美無縫銜接大約 30 分鐘一次的 GitHub 觸發間隔，空窗期小於 30 秒！
+      total_checks = 112
+      sleep_seconds = 15
+
+      for i in range(total_checks):
+        current_time = datetime.now(TAIWAN_TZ)
         print(
-            f"--- 台灣時間 {current_time.strftime('%H:%M:%S')} 執行第 {i+1}"
-            " 次檢查（安靜模式） ---"
+            f"--- 台灣時間 {current_time.strftime('%H:%M:%S')} 執行第"
+            f" {i+1}/{total_checks} 次檢查 ---"
         )
+
         found = await check_once(client)
         if found:
           print(">>> 發現有貨，已發送 Discord 通知！")
           return
 
-        if i < 3:
-          await asyncio.sleep(60)
+        # 最後一次檢查完不需要再 sleep
+        if i < total_checks - 1:
+          await asyncio.sleep(sleep_seconds)
 
-      print("目前無庫存，維持安靜。")
+      print("本輪高密度監控結束，等待下次觸發。")
 
     except Exception as e:
       error_msg = traceback.format_exc()
